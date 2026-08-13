@@ -5,7 +5,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
-$BundleDir = Join-Path $ProjectRoot "dist\AiVoiceAssistant"
+$BundleDir = Join-Path $ProjectRoot "dist\Ava"
 $PythonHome = Split-Path -Parent $Python
 $RuntimeBin = Join-Path $PythonHome "Library\bin"
 
@@ -40,8 +40,8 @@ $PyInstallerArgs = @(
     "--log-level", "WARN",
     "--onedir",
     "--windowed",
-    "--name", "AiVoiceAssistant",
-    "--icon", "assets\joya.ico",
+    "--name", "Ava",
+    "--icon", "assets\ava.ico",
     "--paths", $ProjectRoot,
     "--add-data", "src\voice_orb_static;src\voice_orb_static",
     "--collect-all", "aec_audio_processing",

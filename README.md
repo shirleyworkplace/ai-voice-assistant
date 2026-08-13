@@ -1,6 +1,6 @@
 # AI Voice Assistant
 
-本地实时语音助手客户端（产品安装包名 **Joya**）。
+本地实时语音助手客户端（产品安装包名 **Ava**）。
 
 本仓库只负责客户端：麦克风采集、Silero VAD、打断（barge-in）、浏览器 Voice Orb，以及通过 HTTP 调用远端的 ASR / LLM / TTS。模型服务需另行部署，本项目不包含其安装与运维。
 
@@ -31,9 +31,9 @@ ai-voice-assistant/
 ├── config.yaml                 # API 端点、VAD、AEC、对话参数
 ├── main.py                     # 入口
 ├── requirements.txt            # 客户端依赖
-├── AiVoiceAssistant.spec       # PyInstaller 规格（可由构建脚本重新生成）
+├── Ava.spec                    # PyInstaller 规格（可由构建脚本重新生成）
 ├── assets/
-│   ├── joya.ico                # 安装包 / 应用图标
+│   ├── ava.ico                # 安装包 / 应用图标
 │   └── zero_shot_prompt.wav    # IndexTTS2 音色参考音频
 ├── models/
 │   └── silero_vad.onnx         # 本地 VAD 模型
@@ -41,8 +41,8 @@ ai-voice-assistant/
 │   └── ai-voice-assistant.iss  # Inno Setup 脚本
 ├── scripts/
 │   ├── download_vad_model.py   # 下载 Silero VAD ONNX
-│   ├── build_windows.ps1       # 打包 dist\AiVoiceAssistant
-│   └── build_installer.ps1     # 生成 release\joya.exe
+│   ├── build_windows.ps1       # 打包 dist\Ava
+│   └── build_installer.ps1     # 生成 release\ava.exe
 └── src/
     ├── config.py               # 配置加载
     ├── pipeline.py             # 流水线（线程 + 队列 + 打断 + 按句切分）
@@ -170,14 +170,14 @@ python main.py
 安装包包含客户端、Silero VAD 模型与 TTS 参考音频；ASR / LLM / TTS 仍通过 `config.yaml` 中的 HTTP API 访问。
 
 ```powershell
-# 生成应用目录 dist\AiVoiceAssistant
+# 生成应用目录 dist\Ava
 .\scripts\build_windows.ps1
 
-# 再生成安装程序 release\joya.exe（需安装 Inno Setup 6）
+# 再生成安装程序 release\ava.exe（需安装 Inno Setup 6）
 .\scripts\build_installer.ps1
 ```
 
-`dist\AiVoiceAssistant` 中的 `config.yaml`、`models`、`assets` 与 `AiVoiceAssistant.exe` 必须放在一起，不能只拷贝 exe。
+`dist\Ava` 中的 `config.yaml`、`models`、`assets` 与 `Ava.exe` 必须放在一起，不能只拷贝 exe。
 
 升级安装会保留用户已修改的 `config.yaml`（`onlyifdoesntexist`），避免覆盖 API 地址等本地配置。
 

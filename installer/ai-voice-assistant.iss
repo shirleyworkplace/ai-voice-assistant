@@ -1,11 +1,11 @@
-#define MyAppName "Joya"
+#define MyAppName "Ava"
 #define MyAppVersion "1.0.0"
 #define MyAppPublisher "AI Voice Assistant"
-#define MyAppExeName "AiVoiceAssistant.exe"
+#define MyAppExeName "Ava.exe"
 #define MyAppId "{{B2802CFA-65AF-4FC2-9866-CBB768CC2362}"
 
 #ifndef SourceDir
-  #define SourceDir "..\dist\AiVoiceAssistant"
+  #define SourceDir "..\dist\Ava"
 #endif
 
 [Setup]
@@ -13,12 +13,12 @@ AppId={#MyAppId}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
-DefaultDirName={autopf}\Joya
+DefaultDirName={autopf}\Ava
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\release
-OutputBaseFilename=joya
-SetupIconFile=..\assets\joya.ico
+OutputBaseFilename=ava
+SetupIconFile=..\assets\ava.ico
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
