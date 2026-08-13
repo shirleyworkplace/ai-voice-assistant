@@ -1,203 +1,218 @@
-# AI Voice Assistant (AI 语音助手)
+# AI Voice Assistant
 
-纯客户端项目: 麦克风采集 + Silero VAD 端点检测, 通过 HTTP API 调用
-部署在**另一台服务器**上的三个模型服务 (SenseVoice / Qwen LLM / CosyVoice)。
-本项目不包含、也不负责这三个模型的部署。
+本地实时语音助手客户端（产品安装包名 **Joya**）。
 
-流程: **麦克风采集 → Silero VAD 端点检测 → SenseVoice API (ASR) → Qwen API (流式 LLM)
-→ 按句切分 → CosyVoice API (流式 TTS) → 流式播放**。中文为主, 支持打断 (barge-in)。
+本仓库只负责客户端：麦克风采集、Silero VAD、打断（barge-in）、浏览器 Voice Orb，以及通过 HTTP 调用远端的 ASR / LLM / TTS。模型服务需另行部署，本项目不包含其安装与运维。
+
+**流程：** 麦克风 → Silero VAD → SenseVoice ASR → Qwen LLM（SSE 流式）→ 按句切分 → IndexTTS2 TTS → 播放
+
+中文为主，也支持英文；支持外放场景下的回声抑制与用户打断。
 
 ## 架构
 
 ```
-┌─────────────────────┐        HTTP         ┌──────────────────────────┐
-│  本项目 (客户端)     │  ─── ASR (wav) ───▶ │  SenseVoice 服务 (远端)   │
-│  含 Silero VAD       │  ◀── text ────────  │                          │
-│                     │                     │  Qwen LLM 服务 (远端)     │  ← 部署在另一台服务器
-│                     │  ─── chat (SSE) ─▶  │  (OpenAI 兼容)            │     (本项目不维护)
-│                     │  ◀── token 流 ────  │                          │
-│                     │                     │  CosyVoice 服务 (远端)    │
-│                     │  ─── tts (PCM) ──▶  │  (流式 PCM)               │
-│                     │  ◀── PCM 流 ──────  │                          │
-└─────────────────────┘                     └──────────────────────────┘
+┌──────────────────────────┐         HTTP          ┌────────────────────────────┐
+│  本项目 (客户端)          │  ── ASR (wav) ──────▶ │  SenseVoice 服务            │
+│  · Silero VAD (本地 ONNX) │  ◀─ text ───────────  │                            │
+│  · AEC / 回声门限         │                       │  Qwen LLM (OpenAI 兼容)    │
+│  · Voice Orb (浏览器 UI)  │  ── chat (SSE) ─────▶ │                            │
+│                          │  ◀─ token 流 ───────  │  IndexTTS2 TTS             │
+│                          │  ── tts (multipart) ▶ │                            │
+│                          │  ◀─ WAV ────────────  │                            │
+└──────────────────────────┘                       └────────────────────────────┘
 ```
 
-VAD 留在客户端本地: 它需要对 32ms 级别的麦克风帧做实时判定, 走网络往返不现实。
-三个模型走 API: 重模型在远端服务器部署, 本项目只调接口。
+VAD 必须留在客户端（约 32ms 帧级判定，网络往返不现实）。ASR / LLM / TTS 走 HTTP API。
 
 ## 目录结构
 
 ```
 ai-voice-assistant/
-├── config.yaml              # API 端点 + VAD + 对话参数
-├── main.py                  # 入口
-├── requirements.txt         # 客户端依赖 (轻量)
+├── config.yaml                 # API 端点、VAD、AEC、对话参数
+├── main.py                     # 入口
+├── requirements.txt            # 客户端依赖
+├── AiVoiceAssistant.spec       # PyInstaller 规格（可由构建脚本重新生成）
+├── assets/
+│   ├── joya.ico                # 安装包 / 应用图标
+│   └── zero_shot_prompt.wav    # IndexTTS2 音色参考音频
+├── models/
+│   └── silero_vad.onnx         # 本地 VAD 模型
+├── installer/
+│   └── ai-voice-assistant.iss  # Inno Setup 脚本
+├── scripts/
+│   ├── download_vad_model.py   # 下载 Silero VAD ONNX
+│   ├── build_windows.ps1       # 打包 dist\AiVoiceAssistant
+│   └── build_installer.ps1     # 生成 release\joya.exe
 └── src/
-    ├── config.py            # 配置加载 (dataclass)
-    ├── audio/
-    │   ├── recorder.py      # 麦克风采集 + VAD 回调 (回调线程只入队)
-    │   └── player.py        # 流式播放 (可打断)
-    ├── vad/silero_vad.py    # Silero VAD 流式端点检测 (本地)
-    ├── asr/sensevoice_asr.py# SenseVoice HTTP 客户端 (POST wav -> text)
-    ├── llm/qwen_llm.py      # OpenAI 兼容 SSE 流式客户端
-    ├── tts/cosyvoice_tts.py # CosyVoice HTTP 客户端 (流式 PCM)
-    └── pipeline.py          # 流水线编排 (线程+队列+打断+历史)
+    ├── config.py               # 配置加载
+    ├── pipeline.py             # 流水线（线程 + 队列 + 打断 + 按句切分）
+    ├── voice_orb.py            # 本地 Voice Orb HTTP/SSE 服务
+    ├── voice_orb_static/       # Voice Orb 前端
+    ├── audio/                  # 采集、播放、AEC
+    ├── vad/silero_vad.py       # Silero VAD（ONNX Runtime）
+    ├── asr/sensevoice_asr.py   # SenseVoice HTTP 客户端
+    ├── llm/qwen_llm.py         # OpenAI 兼容 SSE 客户端
+    └── tts/indextts2_tts.py    # IndexTTS2 HTTP 客户端（返回整段 WAV）
 ```
 
-## 远端服务需满足的接口契约
+构建产物目录 `build/`、`dist/`、`build-staging/`、`dist-staging/` 已加入 `.gitignore`，不提交。
 
-三个服务部署在另一台服务器上 (由你或模型部署方维护), 本项目按以下约定调用。
-只要远端服务实现这些接口即可, 实现技术不限。
+## 远端服务接口
+
+服务可部署在本机或局域网其他机器。默认配置指向 `127.0.0.1`；请按实际地址修改 `config.yaml`。
 
 ### 1. SenseVoice ASR
 
 ```
-POST {base_url}{endpoint}            # 默认 http://<host>:8001/asr
+POST {base_url}{endpoint}            # 默认 http://127.0.0.1:8001/v1/asr
 Content-Type: multipart/form-data
-  file:        wav 音频文件 (16kHz mono)
-  language:    str  ("zh" / "en" / "auto")
-  use_itn:     str  ("true" / "false")
+  file:        wav（16kHz mono）
+  language:    zh / en / auto
+  use_itn:     true / false
 响应: application/json
   {"text": "识别出的文本"}
 ```
 
-可选 `GET {base_url}/health` 用于探活。
+可选 `GET {base_url}/health` 探活。
 
-### 2. Qwen LLM (OpenAI 兼容)
+### 2. Qwen LLM（OpenAI 兼容）
 
 ```
-POST {base_url}/chat/completions     # 默认 http://<host>:8002/v1/chat/completions
+POST {base_url}/chat/completions     # 默认 http://127.0.0.1:8000/v1/chat/completions
 Authorization: Bearer <api_key>
 Content-Type: application/json
   {
-    "model": "Qwen3.5-4B",           # 与 config.yaml 的 llm.model 一致
-    "messages": [{"role":"system","content":"..."},{"role":"user","content":"..."}],
+    "model": "Qwen3.5-2B",           # 须与 config.yaml 的 llm.model 一致
+    "messages": [...],
     "stream": true,
-    "temperature": 0.7, "top_p": 0.9, "max_tokens": 512
+    "temperature": 0.7,
+    "top_p": 0.9,
+    "max_tokens": 128
   }
-响应: SSE 流 (text/event-stream)
-  data: {"choices":[{"delta":{"content":"片"}}]}
-  data: {"choices":[{"delta":{"content":"段"}}]}
-  ...
-  data: [DONE]
+响应: text/event-stream（SSE）
 ```
 
-兼容 vLLM / Ollama / TGI / LocalAI 等任何 OpenAI 兼容服务。
-可选 `GET {base_url}/models` 用于探活。
+兼容 vLLM / Ollama / TGI 等 OpenAI 兼容服务。Windows 上建议用 `127.0.0.1`，避免 `localhost` 优先解析 IPv6 导致连接卡住。
 
-### 3. CosyVoice TTS (流式 PCM)
+### 3. IndexTTS2 TTS
 
 ```
-POST {base_url}{endpoint}            # 默认 http://<host>:8003/tts/stream
-Content-Type: application/json
-  {"text": "要合成的句子", "spk": "中文女", "speed": 1.0}
-响应: application/octet-stream  (chunked transfer, 边合成边发送)
-  响应头:
-    X-Sample-Rate: 22050
-    X-Dtype: float32        # 或 int16
-    X-Channels: 1
-  响应体: 原始 PCM 字节流 (按 X-Dtype 编码), 客户端按 4/2 字节对齐读取并即时播放
+POST {base_url}{endpoint}            # 默认 http://127.0.0.1:8002/v1/tts
+Content-Type: multipart/form-data
+  voice:                      参考音色 wav（客户端上传 assets/zero_shot_prompt.wav）
+  text:                       要合成的句子
+  interval_silence:           段间静音（ms）
+  max_text_tokens_per_segment 分段上限
+响应: audio/wav（完整 WAV；客户端解码后按块送播放器）
 ```
 
-可选 `GET {base_url}/health` 用于探活。
+可选 `GET {base_url}/health` 探活。`tts.sample_rate` 应与服务端输出采样率一致（当前默认 24000）。
 
 ## 环境要求
 
-客户端机器: Python 3.10/3.11, 任意 (CPU 即可, 只要能跑 Silero VAD; 有 GPU 更省 CPU)。
-需能网络访问三个远端服务的端口。
+- Python 3.10 / 3.11（推荐 Conda 环境；本仓库构建脚本默认使用名为 `real-time-voice` 的环境）
+- 能访问上述三个 HTTP 服务
+- Windows 外放打断场景需要 `aec-audio-processing`
+
+本地 VAD 使用 **ONNX Runtime**，不依赖 PyTorch。
 
 ## 安装
 
-```bash
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1   # Windows PowerShell
-# source .venv/bin/activate    # Linux/Mac
-
-# PyTorch (VAD 需要, 按 CUDA 版本选; CPU 版也行)
-pip install torch torchaudio --index-url https://download.pytorch.org/whl/cu121
-
+```powershell
+# 激活你的 Python 环境后
 pip install -r requirements.txt
-pip install aec-audio-processing
+
+# 若缺少 VAD 模型
+python scripts/download_vad_model.py
 ```
+
+确认 `models/silero_vad.onnx` 与 `assets/zero_shot_prompt.wav` 存在。
 
 ## 配置
 
-编辑 `config.yaml`, 把三个 `base_url` 指向远端服务器地址:
+编辑 `config.yaml`，至少改三个服务地址：
 
 ```yaml
 asr:
-  base_url: "http://10.0.0.10:8001"
-  endpoint: "/asr"
+  base_url: "http://127.0.0.1:8001"
+  endpoint: "/v1/asr"
 llm:
-  base_url: "http://10.0.0.10:8002/v1"
-  model: "Qwen3.5-4B"          # 必须与远端服务加载的模型名一致
-  api_key: "EMPTY"             # 远端要求鉴权时填写
+  base_url: "http://127.0.0.1:8000/v1"
+  model: "Qwen3.5-2B"          # 必须与远端实际模型名一致
+  api_key: "EMPTY"
 tts:
-  base_url: "http://10.0.0.10:8003"
-  endpoint: "/tts/stream"
-  sample_rate: 22050           # 需与远端 TTS 输出采样率一致 (用于本地播放)
+  base_url: "http://127.0.0.1:8002"
+  endpoint: "/v1/tts"
+  prompt_audio: "assets/zero_shot_prompt.wav"
+  sample_rate: 24000
 ```
 
 ## 运行
 
-```bash
+```powershell
 python main.py
 ```
 
-启动后直接说话。VAD 检测到说完一句后自动进入 识别→回答→播放;
-说话时若系统正在播放, 会自动打断。
+常用参数：
+
+| 参数 | 说明 |
+|---|---|
+| `--config PATH` | 指定配置文件（默认 `config.yaml`） |
+| `--no-orb` | 不启动浏览器 Voice Orb |
+| `--orb-port PORT` | Voice Orb 端口（默认 `8765`） |
+
+启动后对着麦克风说话即可。VAD 判定说完后自动走识别 → 回答 → 播放；播放中再次开口可打断。浏览器会打开 Voice Orb，可开关麦克风或退出。
+
+开发模式用 `Ctrl+C` 结束；打包版可通过 Voice Orb 退出。
 
 ## Windows 安装包
 
-安装包只包含语音客户端、Silero VAD 模型和 TTS 参考音频；ASR、LLM、TTS
-仍通过 `config.yaml` 中配置的 HTTP API 调用。安装前确认目标用户能访问这些服务。
-
-在 Conda `dev` 环境安装 PyInstaller 后，可生成可分发的应用目录：
+安装包包含客户端、Silero VAD 模型与 TTS 参考音频；ASR / LLM / TTS 仍通过 `config.yaml` 中的 HTTP API 访问。
 
 ```powershell
+# 生成应用目录 dist\AiVoiceAssistant
 .\scripts\build_windows.ps1
-```
 
-输出目录为 `dist\AiVoiceAssistant`。其中的 `config.yaml`、`models`、`assets` 都是
-运行必需文件，不能单独移动 `AiVoiceAssistant.exe`。
-
-安装 [Inno Setup 6](https://jrsoftware.org/isinfo.php) 后，执行：
-
-```powershell
+# 再生成安装程序 release\joya.exe（需安装 Inno Setup 6）
 .\scripts\build_installer.ps1
 ```
 
-安装程序输出到 `release\joya.exe`。升级安装会保留用户已
-修改的 `config.yaml`，因此 API 地址和音频参数不会被覆盖。
+`dist\AiVoiceAssistant` 中的 `config.yaml`、`models`、`assets` 与 `AiVoiceAssistant.exe` 必须放在一起，不能只拷贝 exe。
+
+升级安装会保留用户已修改的 `config.yaml`（`onlyifdoesntexist`），避免覆盖 API 地址等本地配置。
 
 ## 关键设计说明
 
-- **流式按句切分**: LLM 流式 token 累积到句子结束符 (`。！？!?\n`) 或超长时立即送 TTS, 不等整段生成完, 显著降低首句响应延迟。
-- **TTS 流式 PCM**: 远端 chunked 发送, 客户端按 dtype 字节对齐读取并即时播放, 首包延迟低。
-- **ASR 不在音频回调线程**: VAD 切出的 utterance 只入队, ASR HTTP 请求在独立工作线程, 避免阻塞麦克风采集导致爆音。
-- **打断 (barge-in)**: AEC 去回声后 VAD 检测到用户开口 → 停止播放 + 清空待播队列 + 中断 LLM 生成流。
-- **思考链过滤**: 自动剥离 Qwen3 的 `<think>...</think>`, 不送 TTS。
-- **对话历史**: 保留最近 N 轮注入 chat 请求, 支持多轮上下文。
+- **按句切分送 TTS**：LLM 流式输出累积到句末标点，或达到长度上限时优先在标点 / 空格处切开，避免把英文单词从中间拆开。
+- **IndexTTS2**：服务端返回整段 WAV；客户端解码后按约 0.2s 小块连续送入播放器。
+- **ASR 不在音频回调线程**：VAD 切出的 utterance 只入队，HTTP 识别在独立线程，避免阻塞采集。
+- **打断（barge-in）**：AEC / 回声门限过滤扬声器回声后，用户开口可停止播放、清空队列并中断 LLM。
+- **思考链过滤**：自动剥离 Qwen 的 `<think>...</think>`，不送入 TTS。
+- **对话历史**：保留最近 N 轮上下文。
+- **Voice Orb**：本地 SSE 推送音量与状态，网页可开关采集并请求退出。
 
-## 配置调优 (`config.yaml`)
+## 配置调优
 
 | 项 | 说明 |
 |---|---|
-| `vad.threshold` | VAD 语音概率门槛, 越高越严 |
-| `vad.min_silence_duration_ms` | 静音多久判定说完; 太小一句话被切碎, 太大延迟高 |
-| `asr.base_url` / `llm.base_url` / `tts.base_url` | 三个远端服务地址 |
-| `llm.model` | 必须与远端 LLM 服务加载的模型名一致 |
-| `tts.spk` | CosyVoice 音色 (透传给远端) |
-| `tts.sample_rate` | 需与远端 TTS 输出采样率一致 |
-| `aec.enabled` | 外放场景是否启用 AEC 去回声 |
-| `dialog.enable_barge_in` | 用户开口是否打断播放 |
-| `dialog.echo_suppression` | 传统静音抑制；启用 AEC 时应关闭 |
+| `vad.threshold` | 语音概率门槛，越高越严 |
+| `vad.min_silence_duration_ms` | 静音多久算说完；太小易切碎，太大延迟高 |
+| `asr` / `llm` / `tts` 的 `base_url` | 三个远端服务地址 |
+| `llm.model` | 必须与远端模型名完全一致 |
+| `tts.prompt_audio` | IndexTTS2 音色参考 wav |
+| `tts.sample_rate` | 需与 TTS 服务输出采样率一致 |
+| `aec.enabled` | 外放是否启用 AEC |
+| `aec.echo_gate*` | 回声门限，减轻 TTS 回声误触发打断 |
+| `dialog.enable_barge_in` | 是否允许用户打断播放 |
+| `dialog.sentence_max_len` | 强制切分前的最大缓冲长度（在标点/空格处切） |
 
 ## 常见问题
 
-- **连接失败**: `curl <base_url>/health` 确认远端服务可达; 检查网络/防火墙/端口。
-- **LLM 报 model not found**: `config.yaml` 的 `llm.model` 要和远端服务暴露的模型名完全一致。
-- **TTS 播放变调/速度异常**: 确认 `tts.sample_rate` 与远端响应头 `X-Sample-Rate` 一致。
-- **一句话被切碎**: 调大 `vad.min_silence_duration_ms` (如 1200–1500)。
-- **说完后迟迟不响应**: 调小 `vad.min_silence_duration_ms` (如 500)。
-- **远端 TTS 不是流式 (一次性返回整段)**: 仍可工作, 只是首包延迟变高; 确保响应头带 `X-Sample-Rate/X-Dtype` 即可。
+- **连接失败**：用 `curl http://<host>:<port>/health` 探活；检查防火墙与地址（优先 `127.0.0.1`）。
+- **LLM model not found**：`llm.model` 与远端加载名不一致。
+- **TTS 无声 / 报参考音频缺失**：确认 `assets/zero_shot_prompt.wav` 存在，且相对 `config.yaml` 路径可解析。
+- **播放变调**：`tts.sample_rate` 与服务端 WAV 采样率不一致。
+- **一句话被切碎**：增大 `vad.min_silence_duration_ms`（如 1200–1500）。
+- **说完很久才响应**：减小 `vad.min_silence_duration_ms`（如 500–800）。
+- **外放误打断**：调高 `dialog.barge_in_min_rms` / `barge_in_confirm_ms`，或微调 `aec.echo_gate_*`、`stream_delay_ms`。
+- **英文单词被拆开送 TTS**：已按空格/标点切分；若仍异常，检查日志中的 `Assistant sentence:` 是否完整。
