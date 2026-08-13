@@ -1,0 +1,21 @@
+# ===== AI 语音助手 - 客户端依赖 =====
+# 本项目仅本地运行 Silero VAD (ONNX Runtime), SenseVoice/Qwen/CosyVoice 均通过 HTTP API 调用,
+# 因此依赖很轻。模型推理依赖见 server_examples/requirements.txt
+
+# ----- 音频 I/O -----
+sounddevice>=0.4.6
+numpy>=1.24
+soundfile>=0.12
+
+# ----- 配置 -----
+pyyaml>=6.0
+
+# ----- VAD (Silero, 本地运行, ONNX Runtime 版) -----
+# 用 onnxruntime (~100MB) 替代 torch (~2GB), 打包体积大幅缩小
+onnxruntime>=1.16
+
+# ----- HTTP API 客户端 -----
+requests>=2.31
+
+# External-speaker barge-in / AEC backend
+aec-audio-processing

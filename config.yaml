@@ -1,0 +1,87 @@
+# ============================================================
+# AI 语音助手 - 配置文件
+# 架构: VAD 本地, SenseVoice / Qwen LLM / CosyVoice 通过本地 HTTP API 调用
+# 中文为主
+# ============================================================
+
+# ---------- 音频采集 ----------
+audio:
+  sample_rate: 16000          # 麦克风采样率 (SenseVoice 要求 16kHz)
+  channels: 1
+  block_size: 512             # 每帧采样数 (Silero VAD 保持 512 @16kHz)
+  dtype: float32
+
+# ---------- VAD (Silero, 本地运行, ONNX Runtime) ----------
+vad:
+  threshold: 0.45             # 语音概率阈值, 越高越严格
+  min_silence_duration_ms: 1000  # 判定说完的静音时长
+  speech_pad_ms: 300             # 语音两端填充
+  min_speech_duration_ms: 250    # 短于此长度的语音段被忽略
+  model_path: "models/silero_vad.onnx"   # ONNX 模型路径; 留空则自动找 models/*.onnx
+
+# ---------- ASR (SenseVoice, 本地部署的 HTTP API) ----------
+asr:
+  base_url: "http://127.0.0.1:8001"   # SenseVoice 服务地址
+  endpoint: "/v1/asr"                     # POST 上传 wav, 返回 {"text": "..."}
+  language: auto                       # zh / en / auto (透传给服务端)
+  use_itn: true                        # 逆文本规整 (透传给服务端)
+  timeout: 30                          # 请求超时 (秒)
+
+# ---------- LLM (Qwen3.5-4B, 本地部署的 OpenAI 兼容 HTTP API) ----------
+llm:
+  base_url: "http://127.0.0.1:8000/v1" # 勿用 localhost：Windows 会先连 ::1，服务只听 IPv4 时约卡 21s
+  model: "Qwen3.5-2B"                  # 服务端实际加载的模型名 (与 vllm serve --model 对应)
+  api_key: "EMPTY"                     # 本地服务通常随意填, vLLM 默认接受任意
+  max_tokens: 128
+  temperature: 0.7
+  top_p: 0.9
+  repetition_penalty: 1.05             # vLLM 支持; 标准 OpenAI 服务会忽略
+  timeout: 120
+  # 系统提示词 (中文助手人设)
+  system_prompt: |
+    你是一个简洁、自然的中文语音助手，回答要口语化、适合朗读。
+    只给结论和必要信息，普通问题控制在 1-2 句话、60 字以内；复杂问题先简要回答，不展开长篇解释。
+    避免长句、复杂标点、Markdown 和代码块。
+
+# ---------- TTS (IndexTTS2 HTTP API) ----------
+tts:
+  base_url: "http://127.0.0.1:8002"    # IndexTTS2 服务地址
+  endpoint: "/v1/tts"                       # POST multipart/form-data, 返回 audio/wav
+  api_key: ""                               # 可选 X-API-Key
+  prompt_text: "希望你以后能够做的比我还好呦"
+  prompt_audio: "assets/zero_shot_prompt.wav"  # 声音参考音频，相对 config.yaml 解析；作为 voice 上传
+  sample_rate: 24000                   # 与服务端输出采样率一致
+  speed: 1.0
+  timeout: 60
+  interval_silence: 200
+  max_text_tokens_per_segment: 120
+
+# ---------- AEC ----------
+aec:
+  # 回声门限独立于 AEC 后端；后端加载失败时仍可抑制 TTS 回声误触发。
+  echo_gate: true
+  echo_gate_ratio: 0.70       # AEC 后残余能量低于播放参考此比例时，才可能判为回声。
+  echo_gate_correlation: 0.55 # 麦克风与 TTS 波形相似度阈值，建议 0.45-0.70。
+  echo_gate_search_ms: 350    # 搜索外放回声延迟的窗口，单位 ms；距离较远可调至 500。
+  enabled: true              # 是否启用 AEC 声学回声消除；外放且需要打断时建议开启
+  stream_delay_ms: 50        # 播放参考音频到麦克风采集之间的估计延迟，单位 ms；外放误触发多可微调 30-120
+  frame_ms: 10               # AEC 内部处理帧长，单位 ms；WebRTC 类 AEC 通常要求 10ms
+  enable_ns: true            # 是否启用降噪 NS；可减少环境噪声对 VAD 的影响
+  enable_agc: false          # 是否启用自动增益 AGC；不稳定时可能放大回声，默认关闭
+  enable_vad: false          # 是否启用 AEC 库自带 VAD；当前项目使用 Silero VAD，默认关闭
+  playback_hold_ms: 250      # TTS 播放块结束后继续保持回声门限的时间，单位 ms；覆盖扬声器/房间尾音
+
+# ---------- 对话历史 ----------
+dialog:
+  max_history: 6               # 保留的最近轮数 (上下文)
+  enable_barge_in: true        # 用户开口时打断 TTS 播放；AEC 生效时可与外放共存
+  echo_suppression: true       # 旧式静音抑制；AEC 可用时会自动跳过
+  barge_in_confirm_ms: 280     # 连续满足条件多久才打断；开播回声易误触发，不宜过短
+  barge_in_min_rms: 0.004      # 打断确认所需的 AEC 后最小音量；误打断多可再调大
+  sentence_min_len: 4          # 句子最短字符数 (过短不单独送 TTS, 减少请求次数)
+  sentence_max_len: 30         # 累积到此长度优先在标点/空格处切分 (不拆英文单词)
+
+# ---------- 日志 ----------
+log:
+  level: INFO                  # DEBUG / INFO / WARNING
+  show_latency: true           # 打印各阶段耗时
