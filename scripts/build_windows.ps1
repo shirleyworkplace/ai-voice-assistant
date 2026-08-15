@@ -20,11 +20,6 @@ foreach ($path in @("build", "dist\Ava", "Ava.spec")) {
     }
 }
 
-& $Python (Join-Path $PSScriptRoot "build_ava_ico.py")
-if ($LASTEXITCODE -ne 0) {
-    throw "Failed to rebuild assets\ava.ico"
-}
-
 # Conda keeps DLL dependencies outside Python's DLLs directory. PyInstaller
 # does not discover these through pure-Python modules such as sounddevice.
 $RuntimeDlls = @(

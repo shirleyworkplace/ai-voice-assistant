@@ -1,5 +1,5 @@
 #define MyAppName "Ava"
-#define MyAppVersion "1.0.9"
+#define MyAppVersion "1.0.0"
 #define MyAppPublisher "Ava"
 #define MyAppExeName "Ava.exe"
 #define MyAppId "{{8F3C2A91-4D6E-4B17-9C55-2E8A7D1F0B44}"
@@ -22,7 +22,7 @@ DefaultDirName={autopf}\Ava
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\release
-OutputBaseFilename=AvaSetup-1.0.9
+OutputBaseFilename=AvaSetup-1.0.0
 SetupIconFile=..\assets\AvaIcon.ico
 UninstallDisplayName=Ava
 ; Use a unique icon filename to bust Windows desktop/icon caches.

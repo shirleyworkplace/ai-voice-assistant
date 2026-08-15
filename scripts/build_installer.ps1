@@ -14,6 +14,7 @@ if ($LASTEXITCODE -ne 0) {
 
 if (-not $InnoSetup) {
     $candidates = @(
+        "D:\shirley_space\software\InnoSetup 6\ISCC.exe",
         "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
         "C:\Program Files\Inno Setup 6\ISCC.exe"
     )
