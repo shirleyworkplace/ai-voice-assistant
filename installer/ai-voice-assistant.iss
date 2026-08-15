@@ -1,5 +1,5 @@
 #define MyAppName "Ava"
-#define MyAppVersion "1.0.9"
+#define MyAppVersion "1.0.1"
 #define MyAppPublisher "Ava"
 #define MyAppExeName "Ava.exe"
 #define MyAppId "{{B2802CFA-65AF-4FC2-9866-CBB768CC2362}"

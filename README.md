@@ -173,7 +173,7 @@ python main.py
 # 生成应用目录 dist\Ava
 .\scripts\build_windows.ps1
 
-# 再生成安装程序 release\AvaSetup-1.0.9.exe（需安装 Inno Setup 6）
+# 再生成安装程序 release\AvaSetup-1.0.1.exe（需安装 Inno Setup 6）
 .\scripts\build_installer.ps1
 ```
 
