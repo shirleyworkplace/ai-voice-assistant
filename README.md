@@ -173,9 +173,11 @@ python main.py
 # 生成应用目录 dist\Ava
 .\scripts\build_windows.ps1
 
-# 再生成安装程序 release\ava.exe（需安装 Inno Setup 6）
+# 再生成安装程序 release\AvaSetup-1.0.9.exe（需安装 Inno Setup 6）
 .\scripts\build_installer.ps1
 ```
+
+安装包与桌面快捷方式使用仓库中已有的 `assets\ava.ico`，打包过程不会重新生成或覆盖 logo / icon。
 
 `dist\Ava` 中的 `config.yaml`、`models`、`assets` 与 `Ava.exe` 必须放在一起，不能只拷贝 exe。
 

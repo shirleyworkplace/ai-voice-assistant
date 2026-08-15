@@ -14,6 +14,15 @@ if (-not (Test-Path $Python)) {
     throw "Python interpreter not found: $Python"
 }
 
+foreach ($path in @("build", "dist\Ava")) {
+    if (Test-Path $path) {
+        Remove-Item $path -Recurse -Force
+    }
+}
+
+# Use the committed assets\ava.ico and assets\ava-logo.png as-is.
+# Packaging must not regenerate or overwrite logo/icon files.
+
 # Conda keeps DLL dependencies outside Python's DLLs directory. PyInstaller
 # does not discover these through pure-Python modules such as sounddevice.
 $RuntimeDlls = @(
@@ -42,6 +51,7 @@ $PyInstallerArgs = @(
     "--windowed",
     "--name", "Ava",
     "--icon", "assets\ava.ico",
+    "--version-file", "assets\ava_version_info.txt",
     "--paths", $ProjectRoot,
     "--add-data", "src\voice_orb_static;src\voice_orb_static",
     "--collect-all", "aec_audio_processing",
@@ -59,5 +69,7 @@ if ($LASTEXITCODE -ne 0) {
 Copy-Item "config.yaml" (Join-Path $BundleDir "config.yaml") -Force
 Copy-Item "models" (Join-Path $BundleDir "models") -Recurse -Force
 Copy-Item "assets" (Join-Path $BundleDir "assets") -Recurse -Force
+# Existing icon only: shortcuts/uninstall use this copy, do not rebuild it.
+Copy-Item "assets\ava.ico" (Join-Path $BundleDir "ava.ico") -Force
 
 Write-Host "Bundle created: $BundleDir"
