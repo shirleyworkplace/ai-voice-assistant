@@ -202,10 +202,10 @@
     currentAmp += (targetAmp - currentAmp) * 6 * dt;
     pulse += (currentAmp - pulse) * 4 * dt;
 
-    const baseSpeed = 0.18;
-    const speed = baseSpeed + currentAmp * 0.55;
+    // near-silent: rotate very slowly so the sphere stays visually stable
+    const speed = 0.04 + currentAmp * 0.6;
     rotY += speed * dt;
-    rotX += 0.06 * dt;
+    rotX += 0.02 * dt;
   }
 
   function waveDisplacement(theta, phi, t) {
@@ -217,13 +217,15 @@
   }
 
   function buildFrame() {
-    const amp = 0.12 + currentAmp * 0.55; // wave strength
+    // silent → near-zero displacement so the sphere stays close to a perfect ball;
+    // only ramp up distortion with audio input
+    const amp = 0.015 + currentAmp * 0.65;
     const projected = [];
 
     for (let i = 0; i < points.length; i++) {
       const p = points[i];
       const wave = waveDisplacement(p.theta, p.phi, time);
-      const r = orbRadius * (1 + wave * amp * (0.6 + pulse * 1.2));
+      const r = orbRadius * (1 + wave * amp * (0.5 + pulse * 1.3));
 
       let x = p.base.x * r;
       let y = p.base.y * r;
